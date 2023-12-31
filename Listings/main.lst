@@ -1,0 +1,447 @@
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 1   
+
+
+C51 COMPILER V9.60.7.0, COMPILATION OF MODULE MAIN
+OBJECT MODULE PLACED IN .\Objects\main.obj
+COMPILER INVOKED BY: D:\software\Keil_v5\C51\BIN\C51.EXE main.c OPTIMIZE(8,SPEED) BROWSE DEBUG OBJECTEXTEND PRINT(.\List
+                    -ings\main.lst) TABS(2) OBJECT(.\Objects\main.obj)
+
+line level    source
+
+   1          #include <STC90C5xAD.H>
+   2          #include "DS18B02.h"
+   3          #include "LCD1602.h"
+   4          #include "Delay.h"
+   5          #include <INTRINS.H>
+   6          
+   7          //#define PRC //CL模式预编译
+   8          
+   9          //P1        btn
+  10          //P2_0      bzr
+  11          //P0 P2_567 1602
+  12          //P3_456    595
+  13          //P3_7      18B02
+  14          
+  15          
+  16          
+  17          //蜂鸣器数据
+  18          #define Q 0
+  19          #define F4P 7
+  20          #define G4P 9
+  21          #define A4 10
+  22          #define A4P 11
+  23          #define B4 12
+  24          #define C 13
+  25          #define CP 14
+  26          #define D 15
+  27          #define DP 16
+  28          #define E 17
+  29          #define F 18
+  30          #define FP 19
+  31          #define G 20
+  32          #define GP 21
+  33          #define A 22
+  34          #define B 24
+  35          #define SPEED_BS 3
+  36          
+  37          //马达
+  38          #define SPEED_MS 200
+  39          sbit MOTOA = P3^0;
+  40          sbit MOTOB = P3^1;
+  41          sbit MOTOC = P3^2;
+  42          sbit MOTOD = P3^3;
+  43          void playMoto()
+  44          { 
+  45   1          MOTOA = 1;
+  46   1          MOTOB = 0;
+  47   1          MOTOC = 1;
+  48   1          MOTOD = 1;
+  49   1          Delay(SPEED_MS);
+  50   1      
+  51   1          MOTOA = 1;
+  52   1          MOTOB = 1;
+  53   1          MOTOC = 1;
+  54   1          MOTOD = 0;
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 2   
+
+  55   1          Delay(SPEED_MS);
+  56   1      
+  57   1          MOTOA = 0;
+  58   1          MOTOB = 1;
+  59   1          MOTOC = 1;
+  60   1          MOTOD = 1;
+  61   1          Delay(SPEED_MS);
+  62   1      
+  63   1          MOTOA = 1;
+  64   1          MOTOB = 1;
+  65   1          MOTOC = 0;
+  66   1          MOTOD = 1;
+  67   1          Delay(SPEED_MS);            
+  68   1      }
+  69            
+  70            
+  71            
+  72          //蜂鸣器数据
+  73          sbit Bzr = P2^0;
+  74          float tpr;
+  75          unsigned char mProcess,freqS;
+  76          char isPlaying = 0;
+  77          
+  78          unsigned char code ALENI[]={Q,5,C,1,Q,8,C,2,
+  79          D,6,C,2,Q,1,D,3,E,2,Q,2,
+  80          FP,1,E,2,Q,2,D,2,C,3,Q,6,
+  81          Q,2,C,2,Q,8,C,2,D,6,
+  82          C,2,Q,1,D,2,C,2,Q,2,A4P,2,G4P,2,
+  83          Q,2,F4P,1,Q,12,
+  84          C,2,Q,7,C,2,D,6,
+  85          C,2,Q,2,D,2,E,2,Q,2,FP,2,E,1,Q,2,
+  86          Q,1,D,2,C,3,Q,3,G4P,2,Q,2,A4P,1,C,2,
+  87          Q,2,G4P,2,C,2,Q,2,G4P,2,C,6,
+  88          GP,5,FP,11,
+  89          Q,12,G,4,
+  90          F,2,DP,2,Q,2,CP,2,B4,4,B4,5,
+  91          Q,2,G,2,Q,2,F,2,DP,2,Q,1,CP,2,
+  92          B4,5,B4,5,Q,2,A4,2,Q,2,B4,2,
+  93          CP,2,Q,1,DP,3,F,2,Q,1,G,2,A,2,Q,2,B,2,
+  94          A,3,G,2,F,2,Q,2,DP,2,CP,5,
+  95          CP,5,Q,1,G,3,Q,1,F,2,DP,3,
+  96          Q,1,CP,2,B4,4,B4,5,Q,2,G,2,
+  97          Q,2,F,2,DP,2,Q,2,CP,2,B4,4,B4,4,
+  98          B4,2,Q,1,CP,3,Q,1,DP,2,F,2,Q,2,G,2,
+  99          A,1,Q,2,G,2,F,2,Q,2,DP,2,CP,6,
+ 100          CP,6,B4,2,Q,6,0xFF};
+ 101          
+ 102          unsigned int code bzrFreq[]={
+ 103            0,
+ 104            63628,63731,63835,63928,64021,64103,64185,64260,64331,64400,64463,64528,
+ 105            64580,64633,64684,64732,64777,64820,64860,64898,64934,64968,65000,65030,
+ 106            65058,65085,65110,65134,65157,65178,65198,65217,65235,65252,65268,65283,
+ 107          };
+ 108          
+ 109          
+ 110          void Timer0_Init(void)
+ 111          {
+ 112   1        TMOD &= 0xF0;
+ 113   1        TMOD |= 0x01;
+ 114   1        TL0 = 0x00;
+ 115   1        TH0 = 0x00;
+ 116   1        TF0 = 0;
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 3   
+
+ 117   1        TR0 = 1;
+ 118   1        ET0 = 1;
+ 119   1        EA = 1;
+ 120   1        PT0 = 0;
+ 121   1      }
+ 122          
+ 123          //蜂鸣器报警
+ 124          void playALENI()
+ 125          {
+ 126   1        if(isPlaying)
+ 127   1        {
+ 128   2          if(ALENI[mProcess]!=0xFF) 
+ 129   2          {
+ 130   3            freqS=ALENI[mProcess];  
+ 131   3            mProcess++;
+ 132   3            Delay(SPEED_BS/4*ALENI[mProcess]);  
+ 133   3            mProcess++;
+ 134   3            TR0=0;
+ 135   3            Delay(5);
+ 136   3            TR0=1;
+ 137   3          }
+ 138   2          else  
+ 139   2          {
+ 140   3            TR0=0;
+ 141   3            isPlaying=0;
+ 142   3          }
+ 143   2        }
+ 144   1      }
+ 145          
+ 146          void playPre(unsigned int pr)
+ 147          {
+ 148   1        if(isPlaying)
+ 149   1        {
+ 150   2          pr<200?(freqS=(pr-100)/3+1):(freqS=36); 
+ 151   2          Delay(100); 
+ 152   2          TR0=0;
+ 153   2          Delay(1);
+ 154   2          TR0=1;
+ 155   2        }
+ 156   1        else
+ 157   1        {
+ 158   2          TR0=0;
+ 159   2          isPlaying=0;
+ 160   2        }
+ 161   1        
+ 162   1      }
+ 163          
+ 164          
+ 165          //595芯片输入
+ 166          sbit mRCLK=P3^5;  
+ 167          sbit mSRCLK=P3^6; 
+ 168          sbit mSER=P3^4;
+ 169          
+ 170          void hc595_SendByte(unsigned char c1,unsigned char c2,unsigned char c3,unsigned char c4)
+ 171          {
+ 172   1        unsigned char a;
+ 173   1      
+ 174   1        mSRCLK = 1;
+ 175   1        mRCLK = 1;
+ 176   1      
+ 177   1        for(a=0;a<8;a++)     
+ 178   1        {
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 4   
+
+ 179   2          mSER = c1&(0x80>>a);    
+ 180   2          mSRCLK = 0;   
+ 181   2          _nop_();
+ 182   2          _nop_();
+ 183   2          mSRCLK = 1; 
+ 184   2        }
+ 185   1      
+ 186   1        for(a=0;a<8;a++)  
+ 187   1        {
+ 188   2          mSER = c2&(0x80>>a);     
+ 189   2          mSRCLK = 0;   
+ 190   2          _nop_();
+ 191   2          _nop_();
+ 192   2          mSRCLK = 1; 
+ 193   2        }
+ 194   1      
+ 195   1        for(a=0;a<8;a++)  
+ 196   1        {
+ 197   2          mSER = c3&(0x80>>a);    
+ 198   2          mSRCLK = 0;   
+ 199   2          _nop_();
+ 200   2          _nop_();
+ 201   2          mSRCLK = 1; 
+ 202   2        }
+ 203   1      
+ 204   1        for(a=0;a<8;a++)    
+ 205   1        {
+ 206   2          mSER = c4&(0x80>>a);    
+ 207   2          mSRCLK = 0;   
+ 208   2          _nop_();
+ 209   2          _nop_();
+ 210   2          mSRCLK = 1; 
+ 211   2        }
+ 212   1      
+ 213   1        mRCLK = 0;
+ 214   1        _nop_();
+ 215   1        _nop_();
+ 216   1        mRCLK = 1;
+ 217   1        
+ 218   1        mSER=0;
+ 219   1      }
+ 220          
+ 221          //LED点阵报警
+ 222          int time=0;
+ 223          unsigned int code nene1[32]={0x00,0x00,0x03,0xC0,0x0F,0xF0,0x1F,0xFC,0x3F,0xFE,0x3F,0xFF,0x7F,0xFF,0xFF,0x
+             -FE,0xFF,0xFE,0xFF,0xFE,0xFF,0xF8,0xEF,0xF8,0xE7,0xF0,0xE7,0xE0,0xE7,0x00,0x6F,0x80};
+ 224          unsigned int code nene2[32]={0x00,0x00,0x03,0xC0,0x0F,0xF0,0x1F,0xFC,0x3F,0xFE,0x3F,0xFF,0xFF,0xFF,0xFF,0x
+             -FE,0xFF,0xFE,0xFF,0xFE,0xEF,0xF8,0xEF,0xF8,0xE3,0x10,0xE7,0x80,0xFF,0xE0,0x6F,0x80};
+ 225          void playLED()
+ 226          {   
+ 227   1        int i;
+ 228   1        int j;
+ 229   1        if(time++%2)
+ 230   1        {
+ 231   2          for(j=0;j<8;j++)
+ 232   2          {   
+ 233   3            for(i=0;i<16;i++)
+ 234   3            {
+ 235   4              hc595_SendByte(~nene1[2*i],~nene1[2*i+1],i<8?0x00:0x01<<i%8,i<8?0x01<<i:0x00);
+ 236   4            }
+ 237   3          }
+ 238   2          for(j=0;j<8;j++)
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 5   
+
+ 239   2          {
+ 240   3            for(i=0;i<16;i++)
+ 241   3            {
+ 242   4              hc595_SendByte(~nene2[2*i],~nene2[2*i+1],i<8?0x00:0x01<<i%8,i<8?0x01<<i:0x00);
+ 243   4            }       
+ 244   3          } 
+ 245   2        }
+ 246   1        else
+ 247   1        {
+ 248   2          for(j=0;j<8;j++)
+ 249   2          {
+ 250   3            for(i=0;i<16;i++)
+ 251   3            {
+ 252   4              hc595_SendByte(~nene2[2*i],~nene2[2*i+1],i<8?0x00:0x01<<i%8,i<8?0x01<<i:0x00);
+ 253   4            }       
+ 254   3          } 
+ 255   2          for(j=0;j<8;j++)
+ 256   2          {   
+ 257   3            for(i=0;i<16;i++)
+ 258   3            {
+ 259   4              hc595_SendByte(~nene1[2*i],~nene1[2*i+1],i<8?0x00:0x01<<i%8,i<8?0x01<<i:0x00);
+ 260   4            }
+ 261   3          }
+ 262   2        }
+ 263   1      }
+ 264          
+ 265          unsigned int code OM[]={0xDC,0XC0,0XBC,0XC9,0XB5,0XC5,0XC6,0XB0,0XA6,0XD0,0XC3,0XB8,0XC0,0XDE,0XBB,0XB2};
+ 266          
+ 267          unsigned char PCR = 0;
+ 268          void main()
+ 269          {
+ 270   1        float t0;
+ 271   1        float k;
+ 272   1        float prec;
+ 273   1        int i;
+ 274   1        char tH = 30;
+ 275   1        char tB = 0;
+ 276   1        unsigned char precH = 2;
+ 277   1      
+ 278   1        
+ 279   1        LCD_Init();
+ 280   1        LCD_ShowCiallo(1,1);
+ 281   1        Timer0_Init();
+ 282   1        DS_ConvertT();//先转换一次，覆盖默认值
+ 283   1        Delay(1000);//>750ms
+ 284   1        
+ 285   1        t0 = DS_ReadT();
+ 286   1      
+ 287   1        while(1)
+ 288   1        {
+ 289   2          DS_ConvertT();
+ 290   2          tpr = DS_ReadT();
+ 291   2          
+ 292   2          if(tpr<0)tpr=-tpr;//补码转换
+ 293   2      
+ 294   2          
+ 295   2          if(PCR) //两种模式下LCD显示
+ 296   2          {
+ 297   3            //k = (1-0.721)/(tH-t0);
+ 298   3            //prec = k*(tpr-t0)+0.721;
+ 299   3            
+ 300   3            k = 1.0/(tH-tB);
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 6   
+
+ 301   3            prec = k*(tpr-tB);
+ 302   3      
+ 303   3            
+ 304   3            if(prec<precH)
+ 305   3            {
+ 306   4              LCD_ShowString(1,1,"Precent:   H:   ");
+ 307   4              LCD_ShowNum(1,14,tH,2);
+ 308   4              LCD_ShowNum(2,1,prec*100,3);
+ 309   4              LCD_ShowChar(2,4,'.');
+ 310   4              LCD_ShowNum(2,5,(unsigned int)(prec*1000)%10,1);
+ 311   4              LCD_ShowChar(2,6,'%');
+ 312   4            }
+ 313   3            else
+ 314   3            {
+ 315   4              LCD_ShowNum(2,1,999,3);
+ 316   4              LCD_ShowChar(2,4,'.');
+ 317   4              LCD_ShowNum(2,5,9,1);
+ 318   4              LCD_ShowChar(2,6,'%');
+ 319   4              LCD_ShowString(1,1,"Too High!! H:   ");
+ 320   4              LCD_ShowNum(1,14,tH,2);
+ 321   4      
+ 322   4      //        for(i=0;i<16;i++)
+ 323   4      //        {
+ 324   4      //          LCD_ShowChar(1,1+i,OM[i]);
+ 325   4      //        }
+ 326   4            }
+ 327   3            for(i=prec*10;i>0;i--)
+ 328   3            {
+ 329   4              if(i<11)LCD_ShowChar(2,6+i,0xFF);
+ 330   4            }
+ 331   3            for(i=10;i>prec*10;i--)
+ 332   3            {
+ 333   4              LCD_ShowChar(2,6+i,0xFE);
+ 334   4            }
+ 335   3          }
+ 336   2          else
+ 337   2          {
+ 338   3            LCD_ShowString(1,1,"Temperature:    ");
+ 339   3            LCD_ShowString(2,10,"  H:   ");
+ 340   3            LCD_ShowNum(2,14,tH,2);
+ 341   3            LCD_ShowChar(2,1,tpr<0?'-':'+');
+ 342   3            LCD_ShowNum(2,2,tpr,3);
+ 343   3            LCD_ShowChar(2,5,'.');
+ 344   3            LCD_ShowNum(2,6,(unsigned long)(tpr*10000)%10000,4);//四位小数
+ 345   3          }
+ 346   2        
+ 347   2          
+ 348   2          if(tpr>tH)    //触发警报
+ 349   2          {
+ 350   3            isPlaying=1;//为了防止从头放起
+ 351   3            if(PCR)
+ 352   3            {
+ 353   4              playPre((unsigned int)(prec*100));
+ 354   4            }
+ 355   3            else
+ 356   3            {
+ 357   4              playALENI();//得不断循环他，（断续的……）
+ 358   4            }
+ 359   3            playLED();
+ 360   3            //playMoto();
+ 361   3          }
+ 362   2          else
+C51 COMPILER V9.60.7.0   MAIN                                                              10/08/2023 16:42:08 PAGE 7   
+
+ 363   2          {
+ 364   3            isPlaying=0;
+ 365   3            TR0=0;
+ 366   3            freqS=0;
+ 367   3          }
+ 368   2          
+ 369   2          //按钮检测
+ 370   2          if(P10==0)
+ 371   2          {
+ 372   3            Delay(20);
+ 373   3            while(P10==0)
+ 374   3            Delay(20);
+ 375   3            PCR=!PCR;     
+ 376   3          }
+ 377   2          if(P11==0)
+ 378   2          {
+ 379   3            Delay(20);
+ 380   3            while(P11==0)
+ 381   3            Delay(20);
+ 382   3            if(tH>0)tH--;     
+ 383   3          }
+ 384   2          if(P12==0)
+ 385   2          {
+ 386   3            Delay(20);
+ 387   3            while(P12==0)
+ 388   3            Delay(20);
+ 389   3            tH++;     
+ 390   3          }
+ 391   2          if(P13==0)
+ 392   2          {
+ 393   3            Delay(20);
+ 394   3            while(P13==0)
+ 395   3            Delay(20);
+ 396   3            tH=30;      
+ 397   3          }
+ 398   2        }
+ 399   1      }
+ 400          
+ 401          void Timer0_Routine() interrupt 1
+ 402          {
+ 403   1        if(bzrFreq[freqS])  
+ 404   1        {
+ 405   2          TL0 = bzrFreq[freqS]%256;   
+ 406   2          TH0 = bzrFreq[freqS]/256;   
+ 407   2          Bzr=!Bzr; 
+ 408   2        }
+ 409   1      }
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =   2145    ----
+   CONSTANT SIZE    =    558    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     10      25
+   IDATA SIZE       =   ----    ----
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
